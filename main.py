@@ -70,26 +70,37 @@ def home():
 
 @app.route("/search_movie")
 def search_movie():
-    title = request.args.get('title')
-    if not title:
-        return json.dumps({'results': []}), 400
+    try:
+        title = request.args.get('title')
+        print("🔍 Search title received:", title)
 
-    # For now, assume exact match
-    data = pd.read_csv('main_data.csv')
-    matched = data[data['movie_title'].str.lower() == title.lower()]
+        if not title:
+            return json.dumps({'results': []}), 400  # Bad request if title missing
 
-    if matched.empty:
-        return json.dumps({'results': []})
+        data = pd.read_csv('main_data.csv')
 
-    # Return minimal dummy structure compatible with JS
-    result = {
-        'results': [{
-            'id': matched.index[0],
-            'original_title': matched.iloc[0]['movie_title'].capitalize()
-        }]
-    }
-    return json.dumps(result)
+        # Make sure movie_title column exists
+        if 'movie_title' not in data.columns:
+            print("🚨 'movie_title' column missing in main_data.csv")
+            return json.dumps({'results': []}), 500
 
+        matched = data[data['movie_title'].str.lower() == title.lower()]
+
+        if matched.empty:
+            return json.dumps({'results': []})
+
+        result = {
+            'results': [{
+                'id': int(matched.index[0]),
+                'original_title': matched.iloc[0]['movie_title'].capitalize()
+            }]
+        }
+
+        return json.dumps(result)
+
+    except Exception as e:
+        print("🔥 Error in /search_movie route:", str(e))
+        return json.dumps({'results': []}), 500
 
 @app.route("/similarity",methods=["POST"])
 def similarity():
