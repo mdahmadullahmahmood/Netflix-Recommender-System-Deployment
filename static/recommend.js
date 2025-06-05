@@ -1,246 +1,163 @@
-$(function() {
-  // Button will be disabled until we type anything inside the input field
-  const source = document.getElementById('autoComplete');
-  const inputHandler = function(e) {
-    if(e.target.value==""){
-      $('.movie-button').attr('disabled', true);
-    }
-    else{
-      $('.movie-button').attr('disabled', false);
-    }
-  }
-  source.addEventListener('input', inputHandler);
+// Refactored version of the original movie recommendation client JS
+// Major changes:
+// - Modern JavaScript (ES6+)
+// - Use of async/await instead of synchronous AJAX
+// - Better error handling and code structure
+// - API key is assumed to be securely handled server-side
 
-  $('.movie-button').on('click',function(){
-    var my_api_key = '82e5f5adefc149655379ef74d531a0ce';
-    var title = $('.movie').val();
-    if (title=="") {
-      $('.results').css('display','none');
-      $('.fail').css('display','block');
-    }
-    else{
-      load_details(my_api_key,title);
+$(function () {
+  const source = document.getElementById('autoComplete');
+  source.addEventListener('input', (e) => {
+    $('.movie-button').attr('disabled', e.target.value === '');
+  });
+
+  $('.movie-button').on('click', async function () {
+    const title = $('.movie').val();
+    if (!title) {
+      $('.results').hide();
+      $('.fail').show();
+    } else {
+      await loadDetails(title);
     }
   });
 });
 
-// will be invoked when clicking on the recommended movies
-function recommendcard(e){
-  var my_api_key = '82e5f5adefc149655379ef74d531a0ce';
-  var title = e.getAttribute('title'); 
-  load_details(my_api_key,title);
+function recommendcard(e) {
+  const title = e.getAttribute('title');
+  loadDetails(title);
 }
 
-// get the basic details of the movie from the API (based on the name of the movie)
-function load_details(my_api_key,title){
-  $.ajax({
-    type: 'GET',
-    url:'https://api.themoviedb.org/3/search/movie?api_key='+my_api_key+'&query='+title,
+async function loadDetails(title) {
+  try {
+    const response = await fetch(`/search_movie?title=${encodeURIComponent(title)}`);
+    const movie = await response.json();
 
-    success: function(movie){
-      if(movie.results.length<1){
-        $('.fail').css('display','block');
-        $('.results').css('display','none');
-        $("#loader").delay(500).fadeOut();
-      }
-      else{
-        $("#loader").fadeIn();
-        $('.fail').css('display','none');
-        $('.results').delay(1000).css('display','block');
-        var movie_id = movie.results[0].id;
-        var movie_title = movie.results[0].original_title;
-        movie_recs(movie_title,movie_id,my_api_key);
-      }
-    },
-    error: function(){
-      alert('Invalid Request');
+    if (!movie.results || movie.results.length < 1) {
+      $('.fail').show();
+      $('.results').hide();
       $("#loader").delay(500).fadeOut();
-    },
-  });
-}
+    } else {
+      $('#loader').fadeIn();
+      $('.fail').hide();
+      $('.results').delay(1000).show();
 
-// passing the movie name to get the similar movies from python's flask
-function movie_recs(movie_title,movie_id,my_api_key){
-  $.ajax({
-    type:'POST',
-    url:"/similarity",
-    data:{'name':movie_title},
-    success: function(recs){
-      if(recs=="Sorry! The movie you requested is not in our database. Please check the spelling or try with some other movies"){
-        $('.fail').css('display','block');
-        $('.results').css('display','none');
-        $("#loader").delay(500).fadeOut();
-      }
-      else {
-        $('.fail').css('display','none');
-        $('.results').css('display','block');
-        var movie_arr = recs.split('---');
-        var arr = [];
-        for(const movie in movie_arr){
-          arr.push(movie_arr[movie]);
-        }
-        get_movie_details(movie_id,my_api_key,arr,movie_title);
-      }
-    },
-    error: function(){
-      alert("error recs");
-      $("#loader").delay(500).fadeOut();
-    },
-  }); 
-}
-
-// get all the details of the movie using the movie id.
-function get_movie_details(movie_id,my_api_key,arr,movie_title) {
-  $.ajax({
-    type:'GET',
-    url:'https://api.themoviedb.org/3/movie/'+movie_id+'?api_key='+my_api_key,
-    success: function(movie_details){
-      show_details(movie_details,arr,movie_title,my_api_key,movie_id);
-    },
-    error: function(){
-      alert("API Error!");
-      $("#loader").delay(500).fadeOut();
-    },
-  });
-}
-
-// passing all the details to python's flask for displaying and scraping the movie reviews using imdb id
-function show_details(movie_details,arr,movie_title,my_api_key,movie_id){
-  var imdb_id = movie_details.imdb_id;
-  var poster = 'https://image.tmdb.org/t/p/original'+movie_details.poster_path;
-  var overview = movie_details.overview;
-  var genres = movie_details.genres;
-  var rating = movie_details.vote_average;
-  var vote_count = movie_details.vote_count;
-  var release_date = new Date(movie_details.release_date);
-  var runtime = parseInt(movie_details.runtime);
-  var status = movie_details.status;
-  var genre_list = []
-  for (var genre in genres){
-    genre_list.push(genres[genre].name);
-  }
-  var my_genre = genre_list.join(", ");
-  if(runtime%60==0){
-    runtime = Math.floor(runtime/60)+" hour(s)"
-  }
-  else {
-    runtime = Math.floor(runtime/60)+" hour(s) "+(runtime%60)+" min(s)"
-  }
-  arr_poster = get_movie_posters(arr,my_api_key);
-  
-  movie_cast = get_movie_cast(movie_id,my_api_key);
-  
-  ind_cast = get_individual_cast(movie_cast,my_api_key);
-  
-  details = {
-    'title':movie_title,
-      'cast_ids':JSON.stringify(movie_cast.cast_ids),
-      'cast_names':JSON.stringify(movie_cast.cast_names),
-      'cast_chars':JSON.stringify(movie_cast.cast_chars),
-      'cast_profiles':JSON.stringify(movie_cast.cast_profiles),
-      'cast_bdays':JSON.stringify(ind_cast.cast_bdays),
-      'cast_bios':JSON.stringify(ind_cast.cast_bios),
-      'cast_places':JSON.stringify(ind_cast.cast_places),
-      'imdb_id':imdb_id,
-      'poster':poster,
-      'genres':my_genre,
-      'overview':overview,
-      'rating':rating,
-      'vote_count':vote_count.toLocaleString(),
-      'release_date':release_date.toDateString().split(' ').slice(1).join(' '),
-      'runtime':runtime,
-      'status':status,
-      'rec_movies':JSON.stringify(arr),
-      'rec_posters':JSON.stringify(arr_poster),
-  }
-
-  $.ajax({
-    type:'POST',
-    data:details,
-    url:"/recommend",
-    dataType: 'html',
-    complete: function(){
-      $("#loader").delay(500).fadeOut();
-    },
-    success: function(response) {
-      $('.results').html(response);
-      $('#autoComplete').val('');
-      $(window).scrollTop(0);
+      const movie_id = movie.results[0].id;
+      const movie_title = movie.results[0].original_title;
+      await fetchRecommendations(movie_title, movie_id);
     }
-  });
+  } catch (error) {
+    alert('Invalid Request');
+    $("#loader").delay(500).fadeOut();
+  }
 }
 
-// get the details of individual cast
-function get_individual_cast(movie_cast,my_api_key) {
-    cast_bdays = [];
-    cast_bios = [];
-    cast_places = [];
-    for(var cast_id in movie_cast.cast_ids){
-      $.ajax({
-        type:'GET',
-        url:'https://api.themoviedb.org/3/person/'+movie_cast.cast_ids[cast_id]+'?api_key='+my_api_key,
-        async:false,
-        success: function(cast_details){
-          cast_bdays.push((new Date(cast_details.birthday)).toDateString().split(' ').slice(1).join(' '));
-          cast_bios.push(cast_details.biography);
-          cast_places.push(cast_details.place_of_birth);
-        }
-      });
+async function fetchRecommendations(movie_title, movie_id) {
+  try {
+    const response = await fetch('/similarity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: movie_title }),
+    });
+    const recsText = await response.text();
+
+    if (recsText.includes("not in our database")) {
+      $('.fail').show();
+      $('.results').hide();
+      $("#loader").delay(500).fadeOut();
+    } else {
+      $('.fail').hide();
+      $('.results').show();
+      const rec_movies = recsText.split('---');
+      await fetchMovieDetails(movie_id, rec_movies, movie_title);
     }
-    return {cast_bdays:cast_bdays,cast_bios:cast_bios,cast_places:cast_places};
+  } catch (error) {
+    alert('Error fetching recommendations');
+    $("#loader").delay(500).fadeOut();
   }
+}
 
-// getting the details of the cast for the requested movie
-function get_movie_cast(movie_id,my_api_key){
-    cast_ids= [];
-    cast_names = [];
-    cast_chars = [];
-    cast_profiles = [];
+async function fetchMovieDetails(movie_id, rec_movies, movie_title) {
+  try {
+    const response = await fetch(`/movie_details?id=${movie_id}`);
+    const details = await response.json();
 
-    top_10 = [0,1,2,3,4,5,6,7,8,9];
-    $.ajax({
-      type:'GET',
-      url:"https://api.themoviedb.org/3/movie/"+movie_id+"/credits?api_key="+my_api_key,
-      async:false,
-      success: function(my_movie){
-        if(my_movie.cast.length>=10){
-          top_cast = [0,1,2,3,4,5,6,7,8,9];
-        }
-        else {
-          top_cast = [0,1,2,3,4];
-        }
-        for(var my_cast in top_cast){
-          cast_ids.push(my_movie.cast[my_cast].id)
-          cast_names.push(my_movie.cast[my_cast].name);
-          cast_chars.push(my_movie.cast[my_cast].character);
-          cast_profiles.push("https://image.tmdb.org/t/p/original"+my_movie.cast[my_cast].profile_path);
-        }
-      },
-      error: function(){
-        alert("Invalid Request!");
-        $("#loader").delay(500).fadeOut();
-      }
+    const posters = await getMoviePosters(rec_movies);
+    const cast = await getMovieCast(movie_id);
+    const castDetails = await getIndividualCast(cast.cast_ids);
+
+    const data = {
+      title: movie_title,
+      cast_ids: JSON.stringify(cast.cast_ids),
+      cast_names: JSON.stringify(cast.cast_names),
+      cast_chars: JSON.stringify(cast.cast_chars),
+      cast_profiles: JSON.stringify(cast.cast_profiles),
+      cast_bdays: JSON.stringify(castDetails.cast_bdays),
+      cast_bios: JSON.stringify(castDetails.cast_bios),
+      cast_places: JSON.stringify(castDetails.cast_places),
+      imdb_id: details.imdb_id,
+      poster: `https://image.tmdb.org/t/p/original${details.poster_path}`,
+      genres: details.genres.map(g => g.name).join(', '),
+      overview: details.overview,
+      rating: details.vote_average,
+      vote_count: details.vote_count.toLocaleString(),
+      release_date: new Date(details.release_date).toDateString().split(' ').slice(1).join(' '),
+      runtime: formatRuntime(details.runtime),
+      status: details.status,
+      rec_movies: JSON.stringify(rec_movies),
+      rec_posters: JSON.stringify(posters),
+    };
+
+    const recommendResponse = await fetch('/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
 
-    return {cast_ids:cast_ids,cast_names:cast_names,cast_chars:cast_chars,cast_profiles:cast_profiles};
+    const html = await recommendResponse.text();
+    $('.results').html(html);
+    $('#autoComplete').val('');
+    $(window).scrollTop(0);
+    $('#loader').delay(500).fadeOut();
+  } catch (error) {
+    alert('Error loading movie details');
+    $('#loader').delay(500).fadeOut();
   }
+}
 
-// getting posters for all the recommended movies
-function get_movie_posters(arr,my_api_key){
-  var arr_poster_list = []
-  for(var m in arr) {
-    $.ajax({
-      type:'GET',
-      url:'https://api.themoviedb.org/3/search/movie?api_key='+my_api_key+'&query='+arr[m],
-      async: false,
-      success: function(m_data){
-        arr_poster_list.push('https://image.tmdb.org/t/p/original'+m_data.results[0].poster_path);
-      },
-      error: function(){
-        alert("Invalid Request!");
-        $("#loader").delay(500).fadeOut();
-      },
-    })
+function formatRuntime(runtime) {
+  if (!runtime) return 'N/A';
+  const hours = Math.floor(runtime / 60);
+  const mins = runtime % 60;
+  return mins ? `${hours} hour(s) ${mins} min(s)` : `${hours} hour(s)`;
+}
+
+async function getMovieCast(movie_id) {
+  const response = await fetch(`/movie_cast?id=${movie_id}`);
+  return await response.json();
+}
+
+async function getIndividualCast(cast_ids) {
+  const bdays = [], bios = [], places = [];
+  for (const id of cast_ids) {
+    const res = await fetch(`/person?id=${id}`);
+    const data = await res.json();
+    bdays.push(new Date(data.birthday).toDateString().split(' ').slice(1).join(' '));
+    bios.push(data.biography);
+    places.push(data.place_of_birth);
   }
-  return arr_poster_list;
+  return { cast_bdays: bdays, cast_bios: bios, cast_places: places };
+}
+
+async function getMoviePosters(movies) {
+  const posters = [];
+  for (const movie of movies) {
+    const res = await fetch(`/poster?title=${encodeURIComponent(movie)}`);
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      posters.push(`https://image.tmdb.org/t/p/original${data.results[0].poster_path}`);
+    } else {
+      posters.push(''); // fallback if not found
+    }
+  }
+  return posters;
 }
