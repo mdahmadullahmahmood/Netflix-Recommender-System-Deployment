@@ -70,7 +70,9 @@ def home():
 
 @app.route("/similarity",methods=["POST"])
 def similarity():
+    print("Similarity Endpoint Hit")
     data = request.get_json()
+    print("Request JSON:", data)
     movie = data.get('name')
     if not movie:
         return "No movie name provided", 400
