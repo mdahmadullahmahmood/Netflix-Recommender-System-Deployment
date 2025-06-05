@@ -102,6 +102,27 @@ def search_movie():
         print("🔥 Error in /search_movie route:", str(e))
         return json.dumps({'results': []}), 500
 
+@app.route('/movie_details')
+def movie_details():
+    try:
+        movie_id = request.args.get('id')
+        print("🔍 Fetching details for movie ID:", movie_id)
+
+        # Call TMDB API or fetch from local database here
+        # Replace YOUR_TMDB_API_KEY with your real API key
+        url = f'https://api.themoviedb.org/3/movie/{movie_id}?api_key=82e5f5adefc149655379ef74d531a0ce&language=en-US'
+        response = requests.get(url)
+
+        if response.status_code != 200:
+            print("❌ TMDB API failed:", response.status_code)
+            return {'error': 'Failed to fetch movie details'}, 500
+
+        return response.json()
+
+    except Exception as e:
+        print("🔥 Error in /movie_details route:", str(e))
+        return {'error': str(e)}, 500
+
 @app.route("/similarity",methods=["POST"])
 def similarity():
     print("Similarity Endpoint Hit")
