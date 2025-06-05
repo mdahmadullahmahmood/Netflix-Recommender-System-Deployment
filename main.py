@@ -71,7 +71,11 @@ def home():
 @app.route("/similarity",methods=["POST"])
 def similarity():
     print("Similarity Endpoint Hit")
-    data = request.get_json()
+    #data = request.get_json()
+    if request.method == "POST":
+        movie = request.json['name']
+    else:
+        movie = request.args.get('name')
     print("Request JSON:", data)
     movie = data.get('name')
     if not movie:
