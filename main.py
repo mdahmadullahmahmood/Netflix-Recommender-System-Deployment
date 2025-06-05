@@ -68,16 +68,36 @@ def home():
     suggestions = get_suggestions()
     return render_template('home.html',suggestions=suggestions)
 
+@app.route("/search_movie")
+def search_movie():
+    title = request.args.get('title')
+    if not title:
+        return json.dumps({'results': []}), 400
+
+    # For now, assume exact match
+    data = pd.read_csv('main_data.csv')
+    matched = data[data['movie_title'].str.lower() == title.lower()]
+
+    if matched.empty:
+        return json.dumps({'results': []})
+
+    # Return minimal dummy structure compatible with JS
+    result = {
+        'results': [{
+            'id': matched.index[0],
+            'original_title': matched.iloc[0]['movie_title'].capitalize()
+        }]
+    }
+    return json.dumps(result)
+
+
 @app.route("/similarity",methods=["POST"])
 def similarity():
     print("Similarity Endpoint Hit")
-    #data = request.get_json()
     if request.method == "POST":
         movie = request.json['name']
     else:
         movie = request.args.get('name')
-    print("Request JSON:", data)
-    movie = data.get('name')
     if not movie:
         return "No movie name provided", 400
     rc = rcmd(movie)
