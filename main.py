@@ -70,9 +70,12 @@ def home():
 
 @app.route("/similarity",methods=["POST"])
 def similarity():
-    movie = request.form['name']
+    data = request.get_json()
+    movie = data.get('name')
+    if not movie:
+        return "No movie name provided", 400
     rc = rcmd(movie)
-    if type(rc)==type('string'):
+    if isinstance(rc, str):
         return rc
     else:
         m_str="---".join(rc)
